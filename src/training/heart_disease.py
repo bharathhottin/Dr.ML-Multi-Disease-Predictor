@@ -56,7 +56,7 @@ def train_model():
         # Create a signature for each feature row to prevent duplicate leakage to test set
         row_signature = pd.util.hash_pandas_object(X, index=False)
 
-        # Group-based split (same logic as notebook)
+        # Group-based split 
         gss = GroupShuffleSplit(
             n_splits=1,
             test_size=TEST_SIZE,
