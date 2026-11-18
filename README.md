@@ -1,8 +1,19 @@
-# Dr.ML - Multi-Disease Predictor
+<h1 align="center">🧠 Dr.ML - Multi-Disease Predictor</h1>
+
+<p align="center"><b>Diabetes or heart disease? Two trained models, a REST API and a web UI in one repo.</b></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/scikit--learn-SVC%20%26%20Random%20Forest-F7931E?logo=scikitlearn&logoColor=white" alt="scikit-learn: SVC and Random Forest">
+  <img src="https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white" alt="FastAPI: REST API">
+  <img src="https://img.shields.io/badge/Streamlit-Web%20UI-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit: Web UI">
+</p>
+
+> [!NOTE]
+> This is a learning / portfolio project. It is an independent project and is not a medical tool or medical advice.
+> The predictions come from patterns in two small datasets and are not a diagnosis.
 
 This project predicts if a patient is likely to have **diabetes** or **heart disease**. It has two trained models, a FastAPI backend and a Streamlit web app.
-
-It is a learning project on two small public datasets. It is not a medical tool, and the predictions are not a diagnosis.
 
 ## What the project does
 
