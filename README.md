@@ -74,7 +74,7 @@ Steps 1 to 9 are in the notebooks (section numbers in brackets, both notebooks u
 | 10 | Move the code to scripts | `src/training/diabetes.py` and `heart_disease.py` repeat the split and the final training with the settings from `.env` and `best_hyperparameters.yaml`, and save each pipeline with `joblib`. `src/common/preprocessing_util.py` holds the zero-to-missing step. |
 | 11 | Build the API | FastAPI with `/api/health` and `/api/predict` in `src/backend`. `predictor.py` loads both models once and scores each request. |
 | 12 | Build the web app | Streamlit home page and one page per disease in `src/frontend`. Each page calls the API. |
-| 13 | Deploy | `deploy_drml.sh` sets up an AWS EC2 server and starts both services in the background. |
+| 13 | Deploy | Both services run in the background on an AWS EC2 instance. |
 
 ## Folder structure
 
@@ -107,8 +107,7 @@ Dr.ML-Multi-Disease-Predictor/
 │   └── common/preprocessing_util.py
 ├── assets/screenshots/              # screenshots used in this README
 ├── env_template.txt                 # template for your local .env file
-├── deploy_drml.sh                   # EC2 deploy script
-├── deployment_steps.txt             # EC2 commands
+├── EC2_API_streamlit_commands.txt   # commands used on the EC2 server
 ├── requirements.txt
 └── README.md
 ```
@@ -367,9 +366,9 @@ To see the full workflow (EDA, model comparison, tuning), open the notebooks in 
 
 ## Running on AWS EC2
 
-This is how I ran the project on an EC2 instance. The exact menus depend on your AWS account. `deploy_drml.sh` does most of the work.
+This is how I ran the project on an EC2 instance. The exact menus depend on your AWS account and the Linux image.
 
-1. Launch an EC2 instance with **Ubuntu Server 24.04 LTS** and download the key pair. The script uses `apt-get`, and Ubuntu 24.04 comes with Python 3.12, which the pinned packages need (the Python 3.10 of Ubuntu 22.04 cannot install them).
+1. Launch a Linux EC2 instance and download the key pair. Choose **Ubuntu Server 24.04 LTS**: it comes with Python 3.12, which the pinned packages need (the Python 3.10 of Ubuntu 22.04 cannot install them).
 2. In the security group, open SSH (port `22`, best only for your own IP) and port `8501` for the web app. Open `8000` only if the API itself should be public, because the web app talks to the API from inside the server.
 3. Connect with SSH using the key pair:
 
@@ -377,58 +376,52 @@ This is how I ran the project on an EC2 instance. The exact menus depend on your
    ssh -i "your-key.pem" ubuntu@<public-ip-of-the-instance>
    ```
 
-4. Save your GitHub details in a secrets file that only you can read:
+4. Install Git and Python on the server:
 
    ```bash
-   nano ~/.drml_secrets
+   sudo apt-get update
+   sudo apt-get install -y git python3 python3-venv python3-pip
    ```
 
-   ```text
-   GIT_REPO_URL=https://github.com/<your-user>/<your-repo>.git
-   GITHUB_USERNAME=<your-github-username>
-   GITHUB_TOKEN=<your-github-token>
-   BRANCH=main
-   ```
+5. Clone the repo and install the packages:
 
    ```bash
-   chmod 600 ~/.drml_secrets
+   git clone https://github.com/bharathhottin/Dr.ML-Multi-Disease-Predictor.git
+   cd Dr.ML-Multi-Disease-Predictor
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
    ```
 
-5. Put the deploy script on the server. Paste the contents of `deploy_drml.sh` into a new file, or copy it from your computer with `scp -i "your-key.pem" deploy_drml.sh ubuntu@<public-ip-of-the-instance>:~/`. Then make it executable:
+   If the repository is private, Git asks for your GitHub username and a personal access token as the password.
+
+6. Create the `.env` file (`cp env_template.txt .env`) and set `PROJECT_ROOT` to the project folder on the server, for example `/home/ubuntu/Dr.ML-Multi-Disease-Predictor`. Keep `API_URL` at `127.0.0.1:8000`, because both services run on the same machine.
+7. Start both services in the background, from the project folder and with the virtual environment active:
 
    ```bash
-   nano deploy_drml.sh
-   chmod +x deploy_drml.sh
+   nohup uvicorn src.backend.main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+   nohup streamlit run src/frontend/app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
    ```
 
-6. Run it:
-
-   ```bash
-   ./deploy_drml.sh
-   ```
-
-   The script installs `git`, `python3`, `python3-venv` and `python3-pip`, clones the repo to `~/dr-ml` (or pulls the latest code if it is already there), creates `.venv` and installs `requirements.txt`, writes the `.env` file for the server, stops old processes and starts the API (port `8000`) and the web app (port `8501`) in the background with `nohup`.
-
-7. Check that they are running:
+8. Check that they are running:
 
    ```bash
    curl http://127.0.0.1:8000/api/health
-   ps aux | grep -E "uvicorn|streamlit" | grep -v grep
-   tail -n 50 ~/dr-ml/api.log
-   tail -n 50 ~/dr-ml/ui.log
+   tail -f uvicorn.log
+   tail -f streamlit.log
+   ps aux | grep uvicorn
+   ps aux | grep streamlit
    ```
 
-8. Open `http://<public-ip-of-the-instance>:8501`.
+9. Open `http://<public-ip-of-the-instance>:8501`.
 
-To update the app later, push your changes to GitHub, connect with SSH and run `./deploy_drml.sh` again. It pulls the latest code and restarts both processes. The same commands are saved in `deployment_steps.txt`.
+To update the app later, run `git pull`, stop the two processes (find the process numbers with `ps aux | grep`, then `kill <PID>`) and start them again with the commands from step 7. Folder names are case-sensitive on Linux, so write `src/backend`, `src/frontend` and `dataset` exactly like this.
 
 Good to know:
 
-- The processes are not services, so they stop when the server reboots. Run `./deploy_drml.sh` again to bring them back.
+- The processes are not services, so they stop when the server reboots. Start them again with the commands from step 7.
 - The public IP changes when the instance is stopped and started, unless you attach an Elastic IP.
 - The app is served over plain HTTP and has no login.
-- `~/.drml_secrets` holds your GitHub token. Keep it at `chmod 600` and never commit it.
-- `deploy_drml.sh` writes `best_hyperparams.yaml` into the server's `.env`, but the real file is `src/training/config/best_hyperparameters.yaml`. The API does not read this setting, so the deployment works. It only matters if you train on the server, so fix the file name in `.env` before you do.
 
 ## Limitations
 
@@ -447,7 +440,6 @@ Good to know:
 - Build the input row with the model's own column order, so that the heart model does not depend on the order of the features.
 - Add help text with the meaning of the codes (`cp`, `restecg`, `slope`, `ca`, `thal`) on the heart page.
 - Replace `SVC(probability=True)`, which scikit-learn 1.9 marks as deprecated, with `CalibratedClassifierCV`. This also gives the result and the probability from the same calibrated model.
-- Fix the `best_hyperparams.yaml` file name in `deploy_drml.sh`.
 - Test the models on data from another source, because the test sets here are small and the heart data has many repeated rows.
 - Add unit tests for the API.
 - Put the API and the web app in Docker.
